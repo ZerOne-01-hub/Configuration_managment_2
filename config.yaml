@@ -1,0 +1,23 @@
+# Конфигурационный файл для инструмента визуализации графа зависимостей
+
+# Имя анализируемого пакета
+package_name: "express"
+
+# URL-адрес репозитория или путь к файлу тестового репозитория
+repository_url: "https://registry.npmjs.org"
+
+# Режим работы с тестовым репозиторием (true/false)
+test_mode: false
+
+# Путь к файлу тестового репозитория (используется только при test_mode: true)
+test_repository_path: ""
+
+# Версия пакета
+package_version: "latest"
+
+# Режим вывода зависимостей в формате ASCII-дерева (true/false)
+ascii_tree_mode: true
+
+# Подстрока для фильтрации пакетов
+filter_substring: ""
+
