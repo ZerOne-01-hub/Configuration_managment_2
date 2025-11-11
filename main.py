@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
 CLI-приложение для визуализации графа зависимостей пакетов.
-Этап 2: Сбор данных.
+Этап 3: Основные операции.
 """
 import sys
 import argparse
 from config_parser import ConfigParser, ConfigError
 from npm_fetcher import NPMFetcher, NPMFetcherError
+from dependency_graph import DependencyGraph
+from test_repository_loader import TestRepositoryLoader, TestRepositoryError
 
 
 def print_config(config: dict) -> None:
@@ -55,35 +57,97 @@ def main():
         print_config(config)
         print()
         
-        # Этап 2: Получение прямых зависимостей
-        if not config.get('test_mode', False):
-            print("=" * 60)
-            print("Получение информации о зависимостях...")
-            print("=" * 60)
-            
-            package_name = config['package_name']
-            package_version = config['package_version']
-            registry_url = config['repository_url']
-            
-            try:
+        package_name = config['package_name']
+        package_version = config['package_version']
+        filter_substring = config.get('filter_substring', '')
+        test_mode = config.get('test_mode', False)
+        
+        # Этап 3: Построение графа зависимостей
+        print("=" * 60)
+        print("Построение графа зависимостей...")
+        print("=" * 60)
+        
+        graph = DependencyGraph(filter_substring=filter_substring)
+        
+        try:
+            if test_mode:
+                # Режим тестирования
+                test_repo_path = config.get('test_repository_path', '')
+                if not test_repo_path:
+                    print("Ошибка: в режиме тестирования необходимо указать test_repository_path", file=sys.stderr)
+                    return 1
+                
+                loader = TestRepositoryLoader(test_repo_path)
+                get_deps_func = loader.create_dependency_getter()
+                
+                print(f"\nЗагрузка тестового репозитория из: {test_repo_path}")
+                print(f"Анализ пакета: {package_name}")
+                
+            else:
+                # Режим работы с npm registry
+                registry_url = config['repository_url']
                 fetcher = NPMFetcher(registry_url)
-                dependencies = fetcher.get_dependencies(package_name, package_version)
                 
-                print(f"\nПрямые зависимости пакета '{package_name}' (версия: {package_version}):")
-                print("-" * 60)
+                def get_deps_func(pkg: str) -> dict:
+                    """Обертка для получения зависимостей через fetcher."""
+                    return fetcher.get_dependencies(pkg, "latest")
                 
-                if dependencies:
-                    for dep_name, dep_version in sorted(dependencies.items()):
-                        print(f"  {dep_name}: {dep_version}")
-                else:
-                    print("  (нет зависимостей)")
-                
-                print("-" * 60)
-                print(f"Всего зависимостей: {len(dependencies)}")
-                
-            except NPMFetcherError as e:
-                print(f"Ошибка получения зависимостей: {e}", file=sys.stderr)
-                return 1
+                print(f"\nПолучение зависимостей из npm registry...")
+                print(f"Пакет: {package_name} (версия: {package_version})")
+            
+            # Построение графа с использованием DFS
+            print("\nПостроение графа зависимостей (DFS)...")
+            graph.build_graph_dfs(package_name, get_deps_func)
+            
+            # Вывод результатов
+            print("\n" + "=" * 60)
+            print("Результаты анализа:")
+            print("=" * 60)
+            
+            # Прямые зависимости
+            direct_deps = graph.get_direct_dependencies(package_name)
+            print(f"\nПрямые зависимости '{package_name}': {len(direct_deps)}")
+            if direct_deps:
+                for dep in sorted(direct_deps):
+                    print(f"  - {dep}")
+            else:
+                print("  (нет прямых зависимостей)")
+            
+            # Все зависимости (транзитивные)
+            all_deps = graph.get_all_dependencies(package_name)
+            print(f"\nВсе зависимости '{package_name}' (транзитивные): {len(all_deps)}")
+            if all_deps:
+                for dep in sorted(all_deps):
+                    print(f"  - {dep}")
+            
+            # Циклические зависимости
+            cycles = graph.get_cycles()
+            if cycles:
+                print(f"\n⚠ Обнаружены циклические зависимости: {len(cycles)}")
+                for i, cycle in enumerate(cycles, 1):
+                    cycle_str = " -> ".join(cycle)
+                    print(f"  Цикл {i}: {cycle_str}")
+            else:
+                print("\n✓ Циклических зависимостей не обнаружено")
+            
+            # Статистика
+            all_packages = graph.get_all_packages()
+            print(f"\nВсего уникальных пакетов в графе: {len(all_packages)}")
+            
+            if filter_substring:
+                print(f"\nПрименена фильтрация по подстроке: '{filter_substring}'")
+            
+        except TestRepositoryError as e:
+            print(f"Ошибка тестового репозитория: {e}", file=sys.stderr)
+            return 1
+        except NPMFetcherError as e:
+            print(f"Ошибка получения зависимостей: {e}", file=sys.stderr)
+            return 1
+        except Exception as e:
+            print(f"Ошибка построения графа: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            return 1
         
         return 0
         
