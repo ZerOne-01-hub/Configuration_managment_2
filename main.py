@@ -9,6 +9,8 @@ from config_parser import ConfigParser, ConfigError
 from npm_fetcher import NPMFetcher, NPMFetcherError
 from dependency_graph import DependencyGraph
 from test_repository_loader import TestRepositoryLoader, TestRepositoryError
+from d2_generator import D2Generator
+from ascii_tree import ASCIITreeGenerator
 
 
 def print_config(config: dict) -> None:
@@ -157,6 +159,29 @@ def main():
             
             if filter_substring:
                 print(f"\nПрименена фильтрация по подстроке: '{filter_substring}'")
+            
+            # Этап 5: Визуализация
+            print("\n" + "=" * 60)
+            print("Визуализация графа зависимостей")
+            print("=" * 60)
+            
+            # Генерация D2 диаграммы
+            d2_gen = D2Generator(graph, package_name)
+            d2_diagram = d2_gen.generate()
+            
+            print("\nОписание графа на языке D2:")
+            print("-" * 60)
+            print(d2_diagram)
+            print("-" * 60)
+            
+            # Генерация ASCII-дерева (если включен режим)
+            if config.get('ascii_tree_mode', False):
+                print("\nASCII-дерево зависимостей:")
+                print("-" * 60)
+                ascii_gen = ASCIITreeGenerator(graph, package_name)
+                ascii_tree = ascii_gen.generate_compact()
+                print(ascii_tree)
+                print("-" * 60)
             
         except TestRepositoryError as e:
             print(f"Ошибка тестового репозитория: {e}", file=sys.stderr)
