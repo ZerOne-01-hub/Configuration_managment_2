@@ -97,7 +97,19 @@ def main():
             
             # Построение графа с использованием DFS
             print("\nПостроение графа зависимостей (DFS)...")
+            
+            # Сначала строим граф от заданного пакета
             graph.build_graph_dfs(package_name, get_deps_func)
+            
+            # В тестовом режиме строим полный граф для корректного поиска обратных зависимостей
+            if test_mode:
+                # Получаем все пакеты из тестового репозитория
+                if hasattr(loader, 'repository'):
+                    all_test_packages = set(loader.repository.keys())
+                    # Строим граф от каждого пакета, который еще не обработан
+                    for pkg in all_test_packages:
+                        if pkg not in graph.get_all_packages():
+                            graph.build_graph_dfs(pkg, get_deps_func)
             
             # Вывод результатов
             print("\n" + "=" * 60)
@@ -129,6 +141,15 @@ def main():
                     print(f"  Цикл {i}: {cycle_str}")
             else:
                 print("\n✓ Циклических зависимостей не обнаружено")
+            
+            # Обратные зависимости (Этап 4)
+            reverse_deps = graph.get_reverse_dependencies(package_name)
+            print(f"\nОбратные зависимости '{package_name}' (пакеты, которые зависят от него): {len(reverse_deps)}")
+            if reverse_deps:
+                for dep in sorted(reverse_deps):
+                    print(f"  - {dep}")
+            else:
+                print("  (нет обратных зависимостей)")
             
             # Статистика
             all_packages = graph.get_all_packages()

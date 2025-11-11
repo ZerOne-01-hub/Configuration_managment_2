@@ -186,6 +186,122 @@ class DependencyGraph:
             all_packages.update(deps)
         return all_packages
     
+    def get_reverse_dependencies(
+        self,
+        package: str,
+        visited: Optional[Set[str]] = None
+    ) -> Set[str]:
+        """
+        Получает обратные зависимости пакета (пакеты, которые зависят от данного).
+        Использует алгоритм DFS для обхода графа.
+        
+        Args:
+            package: Имя пакета, для которого ищем обратные зависимости
+            visited: Множество посещенных пакетов (для предотвращения повторной обработки)
+            
+        Returns:
+            Множество пакетов, которые зависят от заданного пакета (не включая сам пакет)
+        """
+        if visited is None:
+            visited = set()
+        
+        # Пропускаем отфильтрованные пакеты
+        if self._should_filter(package):
+            return set()
+        
+        reverse_deps = set()
+        
+        # Проходим по всем пакетам в графе
+        for pkg in self.graph.keys():
+            # Пропускаем сам пакет
+            if pkg == package:
+                continue
+            
+            if self._should_filter(pkg) or pkg in visited:
+                continue
+            
+            # Проверяем, зависит ли этот пакет от целевого (прямо или транзитивно)
+            if self._depends_on(pkg, package, set()):
+                reverse_deps.add(pkg)
+        
+        return reverse_deps
+    
+    def _depends_on(
+        self,
+        package: str,
+        target: str,
+        visited: Set[str]
+    ) -> bool:
+        """
+        Проверяет, зависит ли пакет от целевого (прямо или транзитивно).
+        Использует DFS для обхода.
+        
+        Args:
+            package: Пакет для проверки
+            target: Целевой пакет
+            visited: Множество посещенных пакетов
+            
+        Returns:
+            True если package зависит от target
+        """
+        if package == target:
+            return True
+        
+        if package in visited or self._should_filter(package):
+            return False
+        
+        visited.add(package)
+        
+        # Проверяем прямые зависимости
+        for dep in self.graph.get(package, set()):
+            if self._should_filter(dep):
+                continue
+            if dep == target:
+                return True
+            # Рекурсивно проверяем транзитивные зависимости
+            if self._depends_on(dep, target, visited):
+                return True
+        
+        return False
+    
+    def _find_all_reverse_deps(
+        self,
+        package: str,
+        target: str,
+        visited: Set[str]
+    ) -> Set[str]:
+        """
+        Находит все обратные зависимости для пакета, который зависит от target.
+        Использует DFS для обхода.
+        
+        Args:
+            package: Пакет, который зависит от target
+            target: Целевой пакет
+            visited: Множество посещенных пакетов
+            
+        Returns:
+            Множество обратных зависимостей
+        """
+        reverse_deps = set()
+        
+        if package in visited or self._should_filter(package):
+            return reverse_deps
+        
+        visited.add(package)
+        
+        # Ищем все пакеты, которые зависят от текущего пакета
+        for pkg in self.graph.keys():
+            if self._should_filter(pkg) or pkg in visited:
+                continue
+            
+            # Если пакет зависит от текущего, он тоже обратная зависимость target
+            if self._depends_on(pkg, package, visited.copy()):
+                reverse_deps.add(pkg)
+                # Рекурсивно ищем дальше
+                reverse_deps.update(self._find_all_reverse_deps(pkg, target, visited.copy()))
+        
+        return reverse_deps
+    
     def clear(self) -> None:
         """Очищает граф."""
         self.graph.clear()
